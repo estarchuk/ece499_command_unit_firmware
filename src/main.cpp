@@ -14,6 +14,11 @@
 #include <cstring>
 #include <array>
 #include <esp_timer.h>
+#include "isobus/hardware_integration/twai_plugin.hpp"
+#include "isobus/hardware_integration/can_hardware_interface.hpp"
+#include "isobus/isobus/can_network_manager.hpp"
+#include "isobus/isobus/can_partnered_control_function.hpp"
+#include <iostream>
 
 #define TAG "app"
 
@@ -50,7 +55,9 @@
 
 // Global variables
 rotary_encoder_state_t state = { 0 };
+rotary_encoder_info_t info = { GPIO_NUM_0 };
 i2c_lcd1602_info_t * lcd_info;
+QueueHandle_t event_queue = rotary_encoder_create_queue();
 
 int led_state_0 = 0;
 int led_state_1 = 0;
@@ -81,6 +88,7 @@ static void i2c_master_init(void)
 // More i2c stuff. The other two comments are from the LCD library
 // uart_rx_one_char_block() causes a watchdog trigger, so use the non-blocking
 // uart_rx_one_char() and delay briefly to reset the watchdog.
+// Might not even need this, this function is never used and was an example from the library anyway
 static uint8_t _wait_for_user(void)
 {
     uint8_t c = 0;
@@ -100,7 +108,7 @@ static uint8_t _wait_for_user(void)
     return c;
 }
 
-extern "C" void setup_lcd(void){
+extern "C" void lcd_setup(void){
     // Set up I2C
     i2c_master_init();
     i2c_port_t i2c_num = I2C_MASTER_NUM;
@@ -119,64 +127,117 @@ extern "C" void setup_lcd(void){
     ESP_ERROR_CHECK(i2c_lcd1602_reset(lcd_info));
 }
 
-int last_button_push;
-int current_push;
-
-// Button ISR
+// Button ISR, only sets a flag. Debounce handled in hardware.
 static void _isr_button(void * args){
-    //current_push = esp_timer_get_time()/1000;
-    //if((current_push - last_button_push) > 150){
-        button_flag = 1;
-    //}
-    //last_button_push = current_push;
+
+    button_flag = 1;
+
 }
 
-extern "C" void app_main(void)
-{
+void gpio_setup(void){
+    // Reset GPIO pins, preventing unintended behaviour
+    gpio_reset_pin(GPIO_NUM_4);
+    gpio_reset_pin(GPIO_NUM_5);
+    gpio_reset_pin(GPIO_NUM_6);
+    gpio_reset_pin(GPIO_NUM_7);
+    gpio_reset_pin(GPIO_NUM_8);
 
-    setup_lcd();
-        
-    ESP_ERROR_CHECK(gpio_install_isr_service(0));
+    // Set GPIO pin direction
+    gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
+    gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+    gpio_set_direction(GPIO_NUM_6, GPIO_MODE_OUTPUT);
+    gpio_set_direction(GPIO_NUM_7, GPIO_MODE_OUTPUT);
+    gpio_set_direction(GPIO_NUM_8, GPIO_MODE_INPUT);
 
-    // Rotary encoder setup, from library
-    rotary_encoder_info_t info = { gpio_num_t(0) };
-    ESP_ERROR_CHECK(rotary_encoder_init(&info, gpio_num_t(ROT_ENC_A_GPIO), gpio_num_t(ROT_ENC_B_GPIO)));
+    // Set initial LED status (off)
+    gpio_set_level(GPIO_NUM_4, 0);
+    gpio_set_level(GPIO_NUM_5, 0);
+    gpio_set_level(GPIO_NUM_6, 0);
+    gpio_set_level(GPIO_NUM_7, 0);
+
+}
+
+void rotary_encoder_setup(void){
+
+    ESP_ERROR_CHECK(rotary_encoder_init(&info, GPIO_NUM_21, GPIO_NUM_20));
     ESP_ERROR_CHECK(rotary_encoder_enable_half_steps(&info, ENABLE_HALF_STEPS));
     
     #ifdef FLIP_DIRECTION
         ESP_ERROR_CHECK(rotary_encoder_flip_direction(&info));
     #endif
 
-    QueueHandle_t event_queue = rotary_encoder_create_queue();
     ESP_ERROR_CHECK(rotary_encoder_set_queue(&info, event_queue));
 
+}
 
-    // Reset GPIO pins, preventing unintended behaviour
-    gpio_reset_pin(gpio_num_t(LED_PIN_0));
-    gpio_reset_pin(gpio_num_t(LED_PIN_1));
-    gpio_reset_pin(gpio_num_t(LED_PIN_2));
-    gpio_reset_pin(gpio_num_t(LED_PIN_3));
-    gpio_reset_pin(gpio_num_t(BUTTON_IN));
+void interrupt_setup(void){
 
-    gpio_set_direction(gpio_num_t(LED_PIN_0), GPIO_MODE_OUTPUT);
-    gpio_set_direction(gpio_num_t(LED_PIN_1), GPIO_MODE_OUTPUT);
-    gpio_set_direction(gpio_num_t(LED_PIN_2), GPIO_MODE_OUTPUT);
-    gpio_set_direction(gpio_num_t(LED_PIN_3), GPIO_MODE_OUTPUT);
-    gpio_set_direction(gpio_num_t(BUTTON_IN), GPIO_MODE_INPUT);
+    ESP_ERROR_CHECK(gpio_install_isr_service(0));
+    
+    // Interrupt type needs to be high level, rising edge doesn't work sometimes
+    gpio_set_intr_type(GPIO_NUM_8, GPIO_INTR_HIGH_LEVEL);
+    gpio_isr_handler_add(GPIO_NUM_8, _isr_button, NULL);
+
+}
+
+void propa_callback(const isobus::CANMessage &CANMessage, void *){
+
+    // If a message is received, dump it to the console
+    std::cout << CANMessage.get_data_length() << std::endl;
+}
+
+// There is no guarantee anything works in here at this point (10 July 2024)
+void isobus_setup(void){
+
+    twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_10, GPIO_NUM_9, TWAI_MODE_NORMAL);
+    twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
+    twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
+    std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
 
 
-    // Set button interrupt to be rising edge, might need to be changed
-    gpio_set_intr_type(gpio_num_t(BUTTON_IN), GPIO_INTR_HIGH_LEVEL);
-    gpio_isr_handler_add(gpio_num_t(BUTTON_IN), _isr_button, NULL);
+    isobus::CANHardwareInterface::set_number_of_can_channels(1);
+    isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
+    isobus::CANHardwareInterface::set_periodic_update_interval(10); // Default is 4ms, but we need to adjust this for default ESP32 tick rate of 100Hz
 
-    // Toggle all LEDs off
-    gpio_set_level(gpio_num_t(LED_PIN_0), 0);
-    gpio_set_level(gpio_num_t(LED_PIN_1), 0);
-    gpio_set_level(gpio_num_t(LED_PIN_2), 0);
-    gpio_set_level(gpio_num_t(LED_PIN_3), 0);
+    if (!isobus::CANHardwareInterface::start() || !canDriver->get_is_valid())
+    {
+        ESP_LOGE("AgIsoStack", "Failed to start hardware interface, the CAN driver might be invalid");
+    }
 
+    isobus::NAME TestDeviceNAME(0);
+
+    //! Consider customizing some of these fields, like the function code, to be representative of your device
+    TestDeviceNAME.set_arbitrary_address_capable(true);
+    TestDeviceNAME.set_industry_group(1);
+    TestDeviceNAME.set_device_class(0);
+    TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::RateControl));
+    TestDeviceNAME.set_identity_number(2);
+    TestDeviceNAME.set_ecu_instance(0);
+    TestDeviceNAME.set_function_instance(0);
+    TestDeviceNAME.set_device_class_instance(0);
+    TestDeviceNAME.set_manufacturer_code(1407);
+    auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
+
+    isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xEF00, propa_callback, nullptr);
+
+    std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {1}; // Data is just all ones
+
+    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU);
+
+}
+
+extern "C" void app_main(void)
+{
+
+    lcd_setup();
+    interrupt_setup();
+    rotary_encoder_setup();
+    isobus_setup();
+    
     while (1)
     {
+        // Move this?
         rotary_encoder_event_t event = { 0 };
 
         // Will see if I can remove this
@@ -217,6 +278,7 @@ extern "C" void app_main(void)
         }
 
         // If the button has been pressed, toggle LED state
+        // This logic is fine and can probably stay here
         if (button_flag == 1) {
             button_flag = 0;
             switch (state.position) {
@@ -241,6 +303,7 @@ extern "C" void app_main(void)
         
         // Super disgusting display code, should show each LED's status
         // 0 being off, 1 being on
+        // This is gross, will try to relegate to a function out of the way
         std::string led_0_status, led_1_status, led_2_status, led_3_status;
         led_0_status = "LED 0 status: ";
         led_0_status.append(std::to_string(led_state_0));
