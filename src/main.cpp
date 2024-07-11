@@ -37,13 +37,16 @@
 #define I2C_MASTER_SDA_IO        3
 #define I2C_MASTER_SCL_IO        2
 
-#define LED_PIN_0 4
-#define LED_PIN_1 5
-#define LED_PIN_2 6
-#define LED_PIN_3 7
-#define BUTTON_IN 8
-#define ROT_ENC_A_GPIO 21
-#define ROT_ENC_B_GPIO 20
+// Names so we don't have to constantly look at GPIO pin assignments
+#define led_0 GPIO_NUM_4
+#define led_1 GPIO_NUM_5
+#define led_2 GPIO_NUM_6
+#define led_3 GPIO_NUM_7
+#define button GPIO_NUM_8
+#define encoder_a GPIO_NUM_21
+#define encoder_b GPIO_NUM_20
+#define isobus_tx GPIO_NUM_10
+#define isobus_rx GPIO_NUM_9
 
 // I enabled half steps because it gave a more reliable input
 // we may be able to set it false with our debouncing
@@ -136,30 +139,30 @@ static void _isr_button(void * args){
 
 void gpio_setup(void){
     // Reset GPIO pins, preventing unintended behaviour
-    gpio_reset_pin(GPIO_NUM_4);
-    gpio_reset_pin(GPIO_NUM_5);
-    gpio_reset_pin(GPIO_NUM_6);
-    gpio_reset_pin(GPIO_NUM_7);
-    gpio_reset_pin(GPIO_NUM_8);
+    gpio_reset_pin(led_0);
+    gpio_reset_pin(led_1);
+    gpio_reset_pin(led_2);
+    gpio_reset_pin(led_3);
+    gpio_reset_pin(button);
 
     // Set GPIO pin direction
-    gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
-    gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
-    gpio_set_direction(GPIO_NUM_6, GPIO_MODE_OUTPUT);
-    gpio_set_direction(GPIO_NUM_7, GPIO_MODE_OUTPUT);
-    gpio_set_direction(GPIO_NUM_8, GPIO_MODE_INPUT);
+    gpio_set_direction(led_0, GPIO_MODE_OUTPUT);
+    gpio_set_direction(led_1, GPIO_MODE_OUTPUT);
+    gpio_set_direction(led_2, GPIO_MODE_OUTPUT);
+    gpio_set_direction(led_3, GPIO_MODE_OUTPUT);
+    gpio_set_direction(button, GPIO_MODE_INPUT);
 
     // Set initial LED status (off)
-    gpio_set_level(GPIO_NUM_4, 0);
-    gpio_set_level(GPIO_NUM_5, 0);
-    gpio_set_level(GPIO_NUM_6, 0);
-    gpio_set_level(GPIO_NUM_7, 0);
+    gpio_set_level(led_0, 0);
+    gpio_set_level(led_1, 0);
+    gpio_set_level(led_2, 0);
+    gpio_set_level(led_3, 0);
 
 }
 
 void rotary_encoder_setup(void){
 
-    ESP_ERROR_CHECK(rotary_encoder_init(&info, GPIO_NUM_21, GPIO_NUM_20));
+    ESP_ERROR_CHECK(rotary_encoder_init(&info, encoder_a, encoder_b));
     ESP_ERROR_CHECK(rotary_encoder_enable_half_steps(&info, ENABLE_HALF_STEPS));
     
     #ifdef FLIP_DIRECTION
@@ -175,11 +178,12 @@ void interrupt_setup(void){
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
     // Interrupt type needs to be high level, rising edge doesn't work sometimes
-    gpio_set_intr_type(GPIO_NUM_8, GPIO_INTR_HIGH_LEVEL);
-    gpio_isr_handler_add(GPIO_NUM_8, _isr_button, NULL);
+    gpio_set_intr_type(button, GPIO_INTR_HIGH_LEVEL);
+    gpio_isr_handler_add(button, _isr_button, NULL);
 
 }
 
+// This might not be needed on the command unit
 void propa_callback(const isobus::CANMessage &CANMessage, void *){
 
     // If a message is received, dump it to the console
@@ -189,7 +193,7 @@ void propa_callback(const isobus::CANMessage &CANMessage, void *){
 // There is no guarantee anything works in here at this point (10 July 2024)
 void isobus_setup(void){
 
-    twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_10, GPIO_NUM_9, TWAI_MODE_NORMAL);
+    twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(isobus_tx, isobus_rx, TWAI_MODE_NORMAL);
     twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
@@ -283,19 +287,19 @@ extern "C" void app_main(void)
             button_flag = 0;
             switch (state.position) {
                 case 0:
-                    gpio_set_level(gpio_num_t(LED_PIN_0), !led_state_0);
+                    gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
                     break;
                 case 1:
-                    gpio_set_level(gpio_num_t(LED_PIN_1), !led_state_1);
+                    gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
                     break;
                 case 2:
-                    gpio_set_level(gpio_num_t(LED_PIN_2), !led_state_2);
+                    gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
                     break;
                 case 3:
-                    gpio_set_level(gpio_num_t(LED_PIN_3), !led_state_3);
+                    gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
                     break;
             }
