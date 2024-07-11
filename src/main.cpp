@@ -237,7 +237,7 @@ extern "C" void app_main(void)
     lcd_setup();
     interrupt_setup();
     rotary_encoder_setup();
-    isobus_setup();
+    //isobus_setup();
     
     while (1)
     {
