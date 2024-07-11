@@ -234,8 +234,9 @@ void isobus_setup(void){
 extern "C" void app_main(void)
 {
 
-    lcd_setup();
+    gpio_setup();
     interrupt_setup();
+    lcd_setup();
     rotary_encoder_setup();
     //isobus_setup();
     
