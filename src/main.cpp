@@ -174,6 +174,7 @@ void rotary_encoder_setup(void){
 
 void interrupt_setup(void){
 
+    // Enables ISR service, needed for button and encoder
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
     // Interrupt type needs to be high level, rising edge doesn't work sometimes
@@ -277,8 +278,9 @@ extern "C" void app_main(void)
 {
     int update_flag = 0;
     int last_cursor_pos = 0;
-    lcd_setup();
+    gpio_setup(); 
     interrupt_setup();
+    lcd_setup();
     rotary_encoder_setup();
     //isobus_setup();
     lcd_update();
@@ -292,7 +294,6 @@ extern "C" void app_main(void)
         // Encoder event receive
         xQueueReceive(event_queue, &event, 10);
         ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
-        
 
         // Only move cursor if encoder state changed
         if(last_cursor_pos != state.position){
