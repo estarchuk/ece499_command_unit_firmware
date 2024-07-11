@@ -66,7 +66,6 @@ int led_state_0 = 0;
 int led_state_1 = 0;
 int led_state_2 = 0;
 int led_state_3 = 0;
-
 int button_flag = 0;
 
 // i2c stuff
@@ -231,60 +230,80 @@ void isobus_setup(void){
 
 }
 
+void cursor_update(int line){
+
+    for(int i = 0; i < 4; i++){
+        i2c_lcd1602_move_cursor(lcd_info, 17, i);
+        i2c_lcd1602_write_char(lcd_info, ' ');
+    }
+
+    i2c_lcd1602_move_cursor(lcd_info, 17, line);
+    i2c_lcd1602_write_char(lcd_info, '*');    
+
+}
+
+void lcd_update(void){
+
+    std::string led_0_status, led_1_status, led_2_status, led_3_status;
+    led_0_status = "LED 0 status: ";
+    led_0_status.append(std::to_string(led_state_0));
+    led_1_status = "LED 1 status: ";
+    led_1_status.append(std::to_string(led_state_1));
+    led_2_status = "LED 2 status: ";
+    led_2_status.append(std::to_string(led_state_2));
+    led_3_status = "LED 3 status: ";
+    led_3_status.append(std::to_string(led_state_3));
+    char * led_0_out = new char [led_0_status.length() + 1];
+    char * led_1_out = new char [led_0_status.length() + 1];
+    char * led_2_out = new char [led_0_status.length() + 1];
+    char * led_3_out = new char [led_0_status.length() + 1];
+
+    std::strcpy(led_0_out, led_0_status.c_str());
+    std::strcpy(led_1_out, led_1_status.c_str());
+    std::strcpy(led_2_out, led_2_status.c_str());
+    std::strcpy(led_3_out, led_3_status.c_str());
+    i2c_lcd1602_move_cursor(lcd_info, 0, 0);
+    i2c_lcd1602_write_string(lcd_info, led_0_out);
+    i2c_lcd1602_move_cursor(lcd_info, 0, 1);
+    i2c_lcd1602_write_string(lcd_info, led_1_out);
+    i2c_lcd1602_move_cursor(lcd_info, 0, 2);
+    i2c_lcd1602_write_string(lcd_info, led_2_out);
+    i2c_lcd1602_move_cursor(lcd_info, 0, 3);
+    i2c_lcd1602_write_string(lcd_info, led_3_out);
+
+}
+
 extern "C" void app_main(void)
 {
-
+    int update_flag = 0;
+    int last_cursor_pos = 0;
     lcd_setup();
     interrupt_setup();
     rotary_encoder_setup();
     //isobus_setup();
+    lcd_update();
+    cursor_update(0);
     
     while (1)
     {
         // Move this?
         rotary_encoder_event_t event = { 0 };
 
-        // Will see if I can remove this
-        if (xQueueReceive(event_queue, &event, 10) == pdTRUE)
-        {
-            //printf("Event: position %ld, direction %s\n", event.state.position,
-            //         event.state.direction ? (event.state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
-        } else {
-            // Poll current position and direction
-            // This is default from the rotary encoder library, I want to get rid of it
-            // but couldn't figure it out in time
-            ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
-        }
-
-        // For screen debugging mostly, super inefficient but I wanted a cursor
-        for(int i = 0; i < 4; i++){
-            i2c_lcd1602_move_cursor(lcd_info, 17, i);
-            i2c_lcd1602_write_char(lcd_info, ' ');
-        }
+        // Encoder event receive
+        xQueueReceive(event_queue, &event, 10);
+        ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
         
-        switch (state.position){
-            case 0:
-                i2c_lcd1602_move_cursor(lcd_info, 17, 0);
-                i2c_lcd1602_write_char(lcd_info, '*');
-                break;
-            case 1:
-                i2c_lcd1602_move_cursor(lcd_info, 17, 1);
-                i2c_lcd1602_write_char(lcd_info, '*');
-                break;
-            case 2:
-                i2c_lcd1602_move_cursor(lcd_info, 17, 2);
-                i2c_lcd1602_write_char(lcd_info, '*');
-                break;
-            case 3:
-                i2c_lcd1602_move_cursor(lcd_info, 17, 3);
-                i2c_lcd1602_write_char(lcd_info, '*');
-                break;
+
+        // Only move cursor if encoder state changed
+        if(last_cursor_pos != state.position){
+            cursor_update(state.position);
+            last_cursor_pos = state.position;
         }
 
-        // If the button has been pressed, toggle LED state
-        // This logic is fine and can probably stay here
+        // If the button has been pressed, toggle LED state and send CAN message
         if (button_flag == 1) {
             button_flag = 0;
+            update_flag = 1;
             switch (state.position) {
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
@@ -313,35 +332,11 @@ extern "C" void app_main(void)
             }
         }
         
-        // Super disgusting display code, should show each LED's status
-        // 0 being off, 1 being on
-        // This is gross, will try to relegate to a function out of the way
-        std::string led_0_status, led_1_status, led_2_status, led_3_status;
-        led_0_status = "LED 0 status: ";
-        led_0_status.append(std::to_string(led_state_0));
-        led_1_status = "LED 1 status: ";
-        led_1_status.append(std::to_string(led_state_1));
-        led_2_status = "LED 2 status: ";
-        led_2_status.append(std::to_string(led_state_2));
-        led_3_status = "LED 3 status: ";
-        led_3_status.append(std::to_string(led_state_3));
-        char * led_0_out = new char [led_0_status.length() + 1];
-        char * led_1_out = new char [led_0_status.length() + 1];
-        char * led_2_out = new char [led_0_status.length() + 1];
-        char * led_3_out = new char [led_0_status.length() + 1];
-
-        std::strcpy(led_0_out, led_0_status.c_str());
-        std::strcpy(led_1_out, led_1_status.c_str());
-        std::strcpy(led_2_out, led_2_status.c_str());
-        std::strcpy(led_3_out, led_3_status.c_str());
-        i2c_lcd1602_move_cursor(lcd_info, 0, 0);
-        i2c_lcd1602_write_string(lcd_info, led_0_out);
-        i2c_lcd1602_move_cursor(lcd_info, 0, 1);
-        i2c_lcd1602_write_string(lcd_info, led_1_out);
-        i2c_lcd1602_move_cursor(lcd_info, 0, 2);
-        i2c_lcd1602_write_string(lcd_info, led_2_out);
-        i2c_lcd1602_move_cursor(lcd_info, 0, 3);
-        i2c_lcd1602_write_string(lcd_info, led_3_out);
+        // Only update the LCD if something has changed
+        if(update_flag){
+            update_flag = 0;
+            lcd_update();
+        }
 
     }
 }
