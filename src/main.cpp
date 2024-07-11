@@ -237,7 +237,7 @@ extern "C" void app_main(void)
     lcd_setup();
     interrupt_setup();
     rotary_encoder_setup();
-    isobus_setup();
+    //isobus_setup();
     
     while (1)
     {
@@ -289,18 +289,26 @@ extern "C" void app_main(void)
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
+                    // Send message over CAN containing selected LED/nozzle
+                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0};
                     break;
                 case 1:
                     gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
+                    // Send message over CAN containing selected LED/nozzle
+                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {1};
                     break;
                 case 2:
                     gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
+                    // Send message over CAN containing selected LED/nozzle
+                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {2};                    
                     break;
                 case 3:
                     gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
+                    // Send message over CAN containing selected LED/nozzle
+                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {3};                    
                     break;
             }
         }
