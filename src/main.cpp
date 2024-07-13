@@ -19,6 +19,8 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include <iostream>
+#include <hal/uart_types.h>
+#include <driver/uart.h>
 
 #define TAG "app"
 
@@ -238,6 +240,28 @@ extern "C" void app_main(void)
     interrupt_setup();
     rotary_encoder_setup();
     //isobus_setup();
+
+
+    const uart_port_t uart_num = UART_NUM_1;
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS,
+        .rx_flow_ctrl_thresh = 122,
+    };
+    // Configure UART parameters
+    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
+
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, isobus_tx, isobus_rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+
+    // Setup UART buffered IO with event queue
+    const int uart_buffer_size = (1024 * 2);
+    QueueHandle_t uart_queue;
+    // Install UART driver using an event queue here
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_1, uart_buffer_size, \
+                                            uart_buffer_size, 10, &uart_queue, 0));
     
     while (1)
     {
@@ -289,18 +313,26 @@ extern "C" void app_main(void)
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
+                    char* test_str = "This is a test string.\n";
+                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 1:
                     gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
+                    char* test_str = "This is a test string.\n";
+                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 2:
                     gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
+                    char* test_str = "This is a test string.\n";
+                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 3:
                     gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
+                    char* test_str = "This is a test string.\n";
+                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
             }
         }
