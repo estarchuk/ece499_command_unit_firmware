@@ -236,6 +236,7 @@ void isobus_setup(void){
 extern "C" void app_main(void)
 {
 
+    gpio_setup();
     lcd_setup();
     interrupt_setup();
     rotary_encoder_setup();
@@ -309,29 +310,31 @@ extern "C" void app_main(void)
         // This logic is fine and can probably stay here
         if (button_flag == 1) {
             button_flag = 0;
+            char* test_str = "This is a test string.\n";
+
             switch (state.position) {
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
-                    char* test_str = "This is a test string.\n";
+                    test_str = "This is test string 0.\n";
                     uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 1:
                     gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
-                    char* test_str = "This is a test string.\n";
+                    test_str = "This is test string 1.\n";
                     uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 2:
                     gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
-                    char* test_str = "This is a test string.\n";
+                    test_str = "This is test string 2.\n";
                     uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
                 case 3:
                     gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
-                    char* test_str = "This is a test string.\n";
+                    test_str = "This is test string 3.\n";
                     uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
                     break;
             }
