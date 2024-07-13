@@ -310,32 +310,33 @@ extern "C" void app_main(void)
         // This logic is fine and can probably stay here
         if (button_flag == 1) {
             button_flag = 0;
-            char* test_str = "This is a test string.\n";
+            int test_int[1];
+            test_int[0] = 0;
 
             switch (state.position) {
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
-                    test_str = "This is test string 0.\n";
-                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
+                    test_int[0] = 0;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 1:
                     gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
-                    test_str = "This is test string 1.\n";
-                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
+                    test_int[0] = 1;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 2:
                     gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
-                    test_str = "This is test string 2.\n";
-                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
+                    test_int[0] = 2;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 3:
                     gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
-                    test_str = "This is test string 3.\n";
-                    uart_write_bytes(uart_num, (const char*)test_str, strlen(test_str));
+                    test_int[0] = 3;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
             }
         }
