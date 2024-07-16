@@ -19,6 +19,8 @@
 #include "isobus/isobus/can_network_manager.hpp"
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include <iostream>
+#include <hal/uart_types.h>
+#include <driver/uart.h>
 
 #define TAG "app"
 
@@ -178,67 +180,41 @@ void interrupt_setup(void){
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
     // Interrupt type needs to be high level, rising edge doesn't work sometimes
-    gpio_set_intr_type(button, GPIO_INTR_HIGH_LEVEL);
+    gpio_set_intr_type(button, GPIO_INTR_LOW_LEVEL);
     gpio_isr_handler_add(button, _isr_button, NULL);
 
 }
 
-// This might not be needed on the command unit
-void propa_callback(const isobus::CANMessage &CANMessage, void *){
-
-    // If a message is received, dump it to the console
-    std::cout << CANMessage.get_data_length() << std::endl;
-}
-
-// There is no guarantee anything works in here at this point (10 July 2024)
-void isobus_setup(void){
-
-    twai_general_config_t twaiConfig = TWAI_GENERAL_CONFIG_DEFAULT(isobus_tx, isobus_rx, TWAI_MODE_NORMAL);
-    twai_timing_config_t twaiTiming = TWAI_TIMING_CONFIG_250KBITS();
-    twai_filter_config_t twaiFilter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-    std::shared_ptr<isobus::CANHardwarePlugin> canDriver = std::make_shared<isobus::TWAIPlugin>(&twaiConfig, &twaiTiming, &twaiFilter);
-    std::shared_ptr<isobus::InternalControlFunction> myECU = nullptr; // A pointer to hold our InternalControlFunction
-
-
-    isobus::CANHardwareInterface::set_number_of_can_channels(1);
-    isobus::CANHardwareInterface::assign_can_channel_frame_handler(0, canDriver);
-    isobus::CANHardwareInterface::set_periodic_update_interval(10); // Default is 4ms, but we need to adjust this for default ESP32 tick rate of 100Hz
-
-    if (!isobus::CANHardwareInterface::start() || !canDriver->get_is_valid())
-    {
-        ESP_LOGE("AgIsoStack", "Failed to start hardware interface, the CAN driver might be invalid");
-    }
-
-    isobus::NAME TestDeviceNAME(0);
-
-    //! Consider customizing some of these fields, like the function code, to be representative of your device
-    TestDeviceNAME.set_arbitrary_address_capable(true);
-    TestDeviceNAME.set_industry_group(1);
-    TestDeviceNAME.set_device_class(0);
-    TestDeviceNAME.set_function_code(static_cast<std::uint8_t>(isobus::NAME::Function::RateControl));
-    TestDeviceNAME.set_identity_number(2);
-    TestDeviceNAME.set_ecu_instance(0);
-    TestDeviceNAME.set_function_instance(0);
-    TestDeviceNAME.set_device_class_instance(0);
-    TestDeviceNAME.set_manufacturer_code(1407);
-    auto TestInternalECU = isobus::CANNetworkManager::CANNetwork.create_internal_control_function(TestDeviceNAME, 0);
-
-    isobus::CANNetworkManager::CANNetwork.add_global_parameter_group_number_callback(0xEF00, propa_callback, nullptr);
-
-    std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {1}; // Data is just all ones
-
-    isobus::CANNetworkManager::CANNetwork.send_can_message(0xEF00, messageData.data(), isobus::CAN_DATA_LENGTH, myECU);
-
-}
 
 extern "C" void app_main(void)
 {
 
     gpio_setup();
+    lcd_setup();
     interrupt_setup();
     lcd_setup();
     rotary_encoder_setup();
-    //isobus_setup();
+
+    const uart_port_t uart_num = UART_NUM_1;
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_CTS_RTS,
+        .rx_flow_ctrl_thresh = 122,
+    };
+    // Configure UART parameters
+    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
+
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_1, isobus_tx, isobus_rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+
+    // Setup UART buffered IO with event queue
+    const int uart_buffer_size = (1024 * 2);
+    QueueHandle_t uart_queue;
+    // Install UART driver using an event queue here
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_1, uart_buffer_size, \
+                                            uart_buffer_size, 10, &uart_queue, 0));
     
     while (1)
     {
@@ -286,30 +262,33 @@ extern "C" void app_main(void)
         // This logic is fine and can probably stay here
         if (button_flag == 1) {
             button_flag = 0;
+            int test_int[1];
+            test_int[0] = 0;
+
             switch (state.position) {
                 case 0:
                     gpio_set_level(led_0, !led_state_0);
                     led_state_0 = !led_state_0;
-                    // Send message over CAN containing selected LED/nozzle
-                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {0};
+                    test_int[0] = 0;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 1:
                     gpio_set_level(led_1, !led_state_1);
                     led_state_1 = !led_state_1;
-                    // Send message over CAN containing selected LED/nozzle
-                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {1};
+                    test_int[0] = 1;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 2:
                     gpio_set_level(led_2, !led_state_2);
                     led_state_2 = !led_state_2;
-                    // Send message over CAN containing selected LED/nozzle
-                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {2};                    
+                    test_int[0] = 2;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
                 case 3:
                     gpio_set_level(led_3, !led_state_3);
                     led_state_3 = !led_state_3;
-                    // Send message over CAN containing selected LED/nozzle
-                    //std::array<std::uint8_t, isobus::CAN_DATA_LENGTH> messageData = {3};                    
+                    test_int[0] = 3;
+                    uart_write_bytes(uart_num, (const int*)test_int, sizeof(int));
                     break;
             }
         }
