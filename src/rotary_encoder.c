@@ -167,30 +167,41 @@ static uint8_t _process(rotary_encoder_info_t * info)
     return event;
 }
 
+TickType_t last_ticks = 0;
+const TickType_t DEBOUNCE_DELAY = 30; // Delay in ms
+
 static void _isr_rotenc(void * args)
 {
+
+    TickType_t current_ticks = xTaskGetTickCountFromISR();
+    TickType_t elapsed_ticks = current_ticks - last_ticks;
+    last_ticks = current_ticks;
+
     rotary_encoder_info_t * info = (rotary_encoder_info_t *)args;
     uint8_t event = _process(info);
     bool send_event = false;
 
-    switch (event)
+    if( (elapsed_ticks * portTICK_PERIOD_MS) > DEBOUNCE_DELAY)
     {
-    case DIR_CW:
-        if(info->state.position < 3){
-            ++info->state.position;
+        switch (event)
+        {
+        case DIR_CW:
+            if(info->state.position < 3){
+                ++info->state.position;
+            }
+            info->state.direction = ROTARY_ENCODER_DIRECTION_CLOCKWISE;
+            send_event = true;
+            break;
+        case DIR_CCW:
+            if(info->state.position > 0){
+                --info->state.position;
+            }
+            info->state.direction = ROTARY_ENCODER_DIRECTION_COUNTER_CLOCKWISE;
+            send_event = true;
+            break;
+        default:
+            break;
         }
-        info->state.direction = ROTARY_ENCODER_DIRECTION_CLOCKWISE;
-        send_event = true;
-        break;
-    case DIR_CCW:
-        if(info->state.position > 0){
-            --info->state.position;
-        }
-        info->state.direction = ROTARY_ENCODER_DIRECTION_COUNTER_CLOCKWISE;
-        send_event = true;
-        break;
-    default:
-        break;
     }
 
     if (send_event && info->queue)

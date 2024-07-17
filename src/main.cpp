@@ -178,7 +178,7 @@ void interrupt_setup(void){
     ESP_ERROR_CHECK(gpio_install_isr_service(0));
     
     // Interrupt type needs to be high level, rising edge doesn't work sometimes
-    gpio_set_intr_type(button, GPIO_INTR_HIGH_LEVEL);
+    gpio_set_intr_type(button, GPIO_INTR_LOW_LEVEL);
     gpio_isr_handler_add(button, _isr_button, NULL);
 
 }
