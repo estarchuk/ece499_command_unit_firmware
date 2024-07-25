@@ -50,10 +50,8 @@
 #define isobus_tx GPIO_NUM_10
 #define isobus_rx GPIO_NUM_9
 
-// I enabled half steps because it gave a more reliable input
-// we may be able to set it false with our debouncing
-
-#define ENABLE_HALF_STEPS true  // Set to true to enable tracking of rotary encoder at half step resolution
+// half steps false, get 4 pulses per "click" so full steps
+#define ENABLE_HALF_STEPS false  // Set to true to enable tracking of rotary encoder at half step resolution
 #define RESET_AT          0     // Set to a positive non-zero number to reset the position if this value is exceeded
 #define FLIP_DIRECTION    false  // Set to true to reverse the clockwise/counterclockwise sense
 
@@ -224,12 +222,8 @@ extern "C" void app_main(void)
         // Will see if I can remove this
         if (xQueueReceive(event_queue, &event, 10) == pdTRUE)
         {
-            //printf("Event: position %ld, direction %s\n", event.state.position,
-            //         event.state.direction ? (event.state.direction == ROTARY_ENCODER_DIRECTION_CLOCKWISE ? "CW" : "CCW") : "NOT_SET");
         } else {
-            // Poll current position and direction
-            // This is default from the rotary encoder library, I want to get rid of it
-            // but couldn't figure it out in time
+            
             ESP_ERROR_CHECK(rotary_encoder_get_state(&info, &state));
         }
 
