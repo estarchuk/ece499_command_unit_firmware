@@ -226,11 +226,19 @@ esp_err_t rotary_encoder_init(rotary_encoder_info_t * info, gpio_num_t pin_a, gp
 
         // configure GPIOs
         gpio_reset_pin(info->pin_a);
+        gpio_pad_select_gpio(info->pin_a);
+        //Might be worth giving these a shot to see if behaviour changes
+        //gpio_set_pull_mode(info->pin_a, GPIO_FLOATING);
+        //gpio_set_pull_mode(info->pin_a, GPIO_PULLDOWN_ONLY);
         gpio_set_pull_mode(info->pin_a, GPIO_PULLUP_ONLY);
         gpio_set_direction(info->pin_a, GPIO_MODE_INPUT);
         gpio_set_intr_type(info->pin_a, GPIO_INTR_ANYEDGE);
 
         gpio_reset_pin(info->pin_b);
+        gpio_pad_select_gpio(info->pin_b);
+        //Might be worth giving these a shot to see if behaviour changes
+        //gpio_set_pull_mode(info->pin_a, GPIO_FLOATING);
+        //gpio_set_pull_mode(info->pin_a, GPIO_PULLDOWN_ONLY);
         gpio_set_pull_mode(info->pin_b, GPIO_PULLUP_ONLY);
         gpio_set_direction(info->pin_b, GPIO_MODE_INPUT);
         gpio_set_intr_type(info->pin_b, GPIO_INTR_ANYEDGE);
